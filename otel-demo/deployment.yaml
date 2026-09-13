@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-demo
+  namespace: opentelemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-demo
+  template:
+    metadata:
+      labels:
+        app: otel-demo
+    spec:
+      containers:
+        - name: otel-demo
+          image: otel-demo:1.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://opentelemetry-collector.opentelemetry.svc.cluster.local:4318
+            - name: USER_SERVICE_URL
+              value: http://user-service.opentelemetry.svc.cluster.local:8081
+            - name: INVENTORY_SERVICE_URL
+              value: http://inventory-service.opentelemetry.svc.cluster.local:8082
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-demo
+  namespace: opentelemetry
+spec:
+  selector:
+    app: otel-demo
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

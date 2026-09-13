@@ -1,0 +1,13 @@
+es:
+  uri: http://elasticsearch-client.elastic.svc.cluster.local:9200
+  all: true
+  indices: true
+  indices_settings: true
+  indices_mappings: true
+  shards: true
+  snapshots: true
+  cluster_settings: false
+  timeout: 30s
+
+serviceMonitor:
+  enabled: false

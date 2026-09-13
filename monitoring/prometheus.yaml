@@ -1,0 +1,39 @@
+alertmanager:
+  enabled: false
+
+kube-state-metrics:
+  enabled: false
+
+prometheus-node-exporter:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false
+
+server:
+  persistentVolume:
+    enabled: false
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  retention: 6h
+
+  service:
+    type: ClusterIP
+
+extraScrapeConfigs: |
+  - job_name: 'elasticsearch-exporter'
+    static_configs:
+      - targets:
+          - 'elasticsearch-exporter-prometheus-elasticsearch-exporter.monitoring.svc.cluster.local:9108'
+
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets:
+          - 'opentelemetry-collector.opentelemetry.svc.cluster.local:8889'

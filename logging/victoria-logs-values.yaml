@@ -1,0 +1,20 @@
+server:
+  retentionPeriod: 7d
+
+  persistentVolume:
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  service:
+    type: ClusterIP
+    servicePort: 9428
+
+  ingress:
+    enabled: false
