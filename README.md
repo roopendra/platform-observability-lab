@@ -1,57 +1,87 @@
 # Platform Observability Lab
 
-A reproducible **macOS + Docker Desktop + Minikube** playground for learning practical Platform Engineering observability.
+A reproducible local Kubernetes observability playground for **macOS and Linux** using Minikube and the Docker driver.
 
-## What this lab covers
+This lab demonstrates:
 
-- Kubernetes on Minikube
-- NGINX Ingress and local browser access
+- Kubernetes + NGINX Ingress
 - Elasticsearch infrastructure monitoring
-- Elasticsearch Exporter → Prometheus → Grafana
-- OpenTelemetry Python instrumentation
-- OpenTelemetry Collector
+- Prometheus + Grafana
+- OpenTelemetry SDKs + Collector
 - Kubernetes metadata enrichment
-- Application metrics → Prometheus
-- Application logs → VictoriaLogs
-- Distributed traces → Jaeger
-- Trace context propagation across 3 services
-- Success and failure tracing / failure localization
-- Trace IDs and span IDs in application logs
-- Logs ↔ metrics ↔ traces investigation workflow
+- Distributed tracing with Jaeger
+- Application logs in VictoriaLogs
+- Application metrics in Prometheus
+- Logs ↔ traces correlation
+- A small three-service Python/Flask application with success and failure scenarios
 
-### Final architecture
-
-```text
-                           ┌──────────────► Prometheus ─────► Grafana
-                           │
-3-service demo ── OTLP ──► OTel Collector
-                           │
-                           ├── logs ──────► VictoriaLogs ───► Grafana
-                           │
-                           └── traces ────► Jaeger ─────────► Jaeger UI
-
-Elasticsearch ──► Elasticsearch Exporter ──► Prometheus ──► Grafana
-```
-
-> **Scope:** local learning/dev environment, not production.
+> **Scope:** This is a local learning/development environment, not a production architecture.
 >
-> Jaeger uses in-memory storage, so traces disappear when Jaeger restarts. VictoriaLogs uses 7-day retention and no persistent volume for this lab.
+> Jaeger uses in-memory storage, so traces are lost when Jaeger restarts. VictoriaLogs uses 7-day retention with persistent storage disabled.
 
 ---
 
-# 1. Prerequisites
+## Architecture
 
-This lab is validated on macOS.
+### Application telemetry
+
+```text
+                       OpenTelemetry
+                            │
+                 ┌──────────┴──────────┐
+                 │      Collector      │
+                 │                     │
+                 ├── logs ───────────► VictoriaLogs
+                 ├── metrics ─────────► Prometheus
+                 └── traces ──────────► Jaeger
+                                           │
+                                           ▼
+                                       Jaeger UI
+```
+
+### Application
+
+```text
+                         otel-demo
+                            │
+                 ┌──────────┴──────────┐
+                 ▼                     ▼
+          user-service        inventory-service
+             :8081                   :8082
+```
+
+All three services are instrumented with OpenTelemetry and propagate distributed trace context.
+
+### Elasticsearch monitoring
+
+```text
+Elasticsearch
+      │
+      ▼
+ES Exporter
+      │
+      ▼
+Prometheus
+      │
+      ▼
+Grafana
+```
+
+Elasticsearch is used only for infrastructure monitoring. It is **not** the application log backend.
+
+---
+
+## Quick start
+
+### 1. Prerequisites
 
 Install:
 
-| Tool | Purpose |
-|---|---|
-| Docker Desktop | Container runtime |
-| kubectl | Kubernetes CLI |
-| Minikube | Local Kubernetes |
-| Helm | Install platform components |
-| Python 3 | Optional local demo development |
+- Docker / Docker Desktop
+- Minikube
+- kubectl
+- Helm
+- Python 3
 
 Check:
 
@@ -63,262 +93,163 @@ helm version
 python3 --version
 ```
 
-Docker Desktop must be running. `start.sh` will try to start it automatically on macOS.
-
-### Versions used during validation
-
-- Minikube `1.38.1`
-- Kubernetes `1.35.1`
-- Docker `29.2.1`
-- Elasticsearch `8.15.0`
-- Prometheus Helm chart `29.27.0`
-- Grafana Helm chart `10.5.15`
-- Elasticsearch Exporter Helm chart `7.4.0`
-- OTel Collector Helm chart `0.172.1`
-- OTel Collector `0.159.0`
-- VictoriaLogs Helm chart `0.13.9`
-- VictoriaLogs `1.52.0`
-- VictoriaLogs Grafana plugin `0.31.0`
-- Jaeger `2.20.0`
-
----
-
-# 2. Setup the lab
-
-Clone your repository:
+The lab uses the Minikube Docker driver:
 
 ```bash
-git clone <your-platform-observability-lab-repo-url>
-cd platform-observability-lab
+minikube start --driver=docker
 ```
 
-Make scripts executable:
+`start.sh` handles Minikube startup automatically.
+
+### 2. Start the lab
+
+From the repository root:
 
 ```bash
 chmod +x scripts/*.sh
-```
-
-Start everything:
-
-```bash
 ./scripts/start.sh
 ```
 
-`start.sh` creates the complete lab:
+The script installs/deploys:
 
-1. Docker / Minikube
-2. NGINX Ingress
-3. Elasticsearch
-4. Prometheus
-5. Grafana
-6. Elasticsearch Exporter
-7. VictoriaLogs
-8. OpenTelemetry Collector
-9. Jaeger
-10. `otel-demo`
-11. `user-service`
-12. `inventory-service`
-13. All required Ingress resources
+- Minikube + NGINX Ingress
+- Elasticsearch
+- Prometheus
+- Grafana
+- Elasticsearch exporter
+- VictoriaLogs
+- OpenTelemetry Collector
+- Jaeger
+- Three demo services
 
-Check:
+### 3. Configure browser access
 
-```bash
-kubectl get pods -A
+The lab uses local hostnames:
+
+```text
+grafana.local
+prometheus.local
+elasticsearch.local
+jaeger.local
+otel-demo.local
 ```
 
----
-
-# 3. Enable browser access
-
-With Minikube's Docker driver on macOS, use the tunnel.
-
-Open a second terminal:
-
-```bash
-cd platform-observability-lab
-./scripts/tunnel.sh
-```
-
-Keep it running.
-
-In another terminal:
+Add them to `/etc/hosts`:
 
 ```bash
 sudo ./scripts/hosts.sh
 ```
 
-The helper configures:
+#### macOS
 
-```text
-127.0.0.1 grafana.local
-127.0.0.1 prometheus.local
-127.0.0.1 elasticsearch.local
-127.0.0.1 jaeger.local
-127.0.0.1 otel-demo.local
+With Minikube + Docker driver, browser access normally requires the Minikube tunnel.
+
+Run in a second terminal:
+
+```bash
+./scripts/tunnel.sh
 ```
 
-Normal browser usage does **not** require port-forwarding.
+Keep the tunnel terminal running.
 
----
+#### Linux
 
-# 4. Validate the lab
+The exact networking behavior depends on the Docker/Minikube environment. If the browser-facing Ingress is not reachable directly, use:
 
-Run:
+```bash
+./scripts/tunnel.sh
+```
+
+The normal application workflow does **not** require `kubectl port-forward`.
+
+### 4. Validate
 
 ```bash
 ./scripts/validate.sh
 ```
 
-Quick overview:
-
-```bash
-kubectl get pods -A
-kubectl get svc -A
-kubectl get ingress -A
-```
-
-Check resources if the machine feels slow:
-
-```bash
-kubectl top node
-kubectl top pods -A
-```
-
----
-
-# 5. Generate dummy telemetry
-
-The easiest way to exercise the complete platform:
+### 5. Generate telemetry
 
 ```bash
 ./scripts/generate-data.sh
 ```
 
-It generates:
-
-- successful distributed `/api` requests
-- failed `/api?fail_inventory=true` requests
-- direct `/error` requests
-
-The script uses:
-
-```text
-http://otel-demo.local
-```
-
-So start the tunnel and configure `/etc/hosts` first.
-
-You can also generate individual requests:
-
-### Success
+Or generate individual scenarios:
 
 ```bash
+# Successful distributed request
 curl -s http://otel-demo.local/api
-```
 
-### Failure
-
-```bash
+# Downstream failure
 curl -s "http://otel-demo.local/api?fail_inventory=true"
-```
 
-Expected failure path:
-
-```text
-otel-demo              502
- ├── user-service      200
- └── inventory-service 500
-```
-
-### Direct application error
-
-```bash
+# Direct application error
 curl -s http://otel-demo.local/error
 ```
 
 ---
 
-# 6. Explore the telemetry
+## Browser URLs
 
-## Grafana
+With `/etc/hosts` configured and Ingress networking working:
 
-Open:
+| Component | URL |
+|---|---|
+| Grafana | http://grafana.local |
+| Prometheus | http://prometheus.local |
+| Elasticsearch | http://elasticsearch.local |
+| Jaeger | http://jaeger.local |
+| Demo application | http://otel-demo.local |
 
-```text
-http://grafana.local
-```
-
-Fresh lab credentials:
-
-```text
-admin / admin
-```
-
-If an existing Helm release has a different password:
-
-```bash
-kubectl get secret grafana -n monitoring   -o jsonpath="{.data.admin-password}" | base64 --decode; echo
-```
-
-Grafana has these datasources:
+Grafana is configured with:
 
 - Prometheus
 - VictoriaLogs
 - Jaeger
 
----
-
-## Prometheus
-
-Open:
+Fresh Grafana installations use:
 
 ```text
-http://prometheus.local
+admin / admin
 ```
 
-Try:
+For an existing installation, retrieve the actual credentials:
 
-```promql
-up
+```bash
+kubectl get secret grafana -n monitoring \
+  -o jsonpath="{.data.admin-user}" | base64 --decode; echo
+
+kubectl get secret grafana -n monitoring \
+  -o jsonpath="{.data.admin-password}" | base64 --decode; echo
 ```
 
-```promql
-app_requests_total
-```
-
-```promql
-sum(rate(app_requests_total[5m]))
-```
-
-Elasticsearch exporter:
-
-```promql
-up{job="elasticsearch-exporter"}
-```
-
-Collector application metrics:
-
-```promql
-up{job="otel-collector"}
-```
+Do not commit real credentials to source control.
 
 ---
 
-## Jaeger
+## What to verify
 
-Open:
+### 1. Distributed tracing
+
+Generate:
+
+```bash
+curl -s http://otel-demo.local/api
+```
+
+Open Jaeger:
 
 ```text
 http://jaeger.local
 ```
 
-Select service:
+Search for service:
 
 ```text
 otel-demo
 ```
 
-A successful request should look like:
+A successful request should show one distributed trace containing:
 
 ```text
 otel-demo
@@ -330,27 +261,27 @@ otel-demo
             └── check-inventory
 ```
 
-This is one distributed trace across all three services.
+### 2. Failure propagation
 
-Now run:
+Run:
 
 ```bash
 curl -s "http://otel-demo.local/api?fail_inventory=true"
 ```
 
-The trace should identify:
+Expected high-level result:
 
 ```text
-inventory-service
-└── check-inventory
-    ERROR
+otel-demo                  502
+    │
+    ├── user-service       200
+    │
+    └── inventory-service  500
 ```
 
-while the parent `otel-demo` request returns `502`.
+Jaeger should show the downstream inventory operation and its parent request marked as errors.
 
----
-
-## VictoriaLogs
+### 3. Application logs
 
 Open:
 
@@ -358,87 +289,138 @@ Open:
 http://grafana.local
 ```
 
-Then:
+Go to:
 
 ```text
 Explore → VictoriaLogs
 ```
 
-Look for fields such as:
+Generate traffic first:
 
-```text
-service.name
-trace_id
-span_id
-k8s.namespace.name
-k8s.pod.name
-k8s.deployment.name
-k8s.container.name
+```bash
+./scripts/generate-data.sh
 ```
 
-The practical workflow is:
+Useful searches include:
+
+```text
+service.name:otel-demo
+```
+
+and:
+
+```text
+trace_id
+```
+
+Application logs include trace and span context, allowing an operational workflow such as:
 
 ```text
 Log error
    ↓
-trace_id
+Read trace_id
    ↓
-Jaeger trace
+Open trace
    ↓
 Find slow/failing service
    ↓
 Return to logs for application context
 ```
 
----
+### 4. Application metrics
 
-# 7. What the demo application does
+In Grafana or Prometheus, try:
 
-The demo is intentionally small:
-
-```text
-                  ┌────────────────┐
-                  │   otel-demo    │
-                  │      :8080     │
-                  └───────┬────────┘
-                          │
-                 ┌────────┴────────┐
-                 ▼                 ▼
-        ┌────────────────┐  ┌────────────────────┐
-        │  user-service  │  │ inventory-service  │
-        │     :8081      │  │       :8082        │
-        └────────────────┘  └────────────────────┘
+```promql
+app_requests_total
 ```
 
-`/api` calls both downstream services.
+and:
 
-`fail_inventory=true` intentionally makes `inventory-service` fail. This makes the distributed trace useful for demonstrating blast-radius/failure localization.
+```promql
+sum(rate(app_requests_total[5m]))
+```
 
-All three services send telemetry to the Collector using OTLP.
-
----
-
-# 8. Collector pipelines
-
-The Collector is the central telemetry routing layer:
+The application metric path is:
 
 ```text
 Application
-    │
+    │ OTLP
     ▼
 OTel Collector
-    ├── logs    → VictoriaLogs
-    ├── metrics → Prometheus
-    └── traces  → Jaeger
+    │ Prometheus exporter :8889
+    ▼
+Prometheus
+    ▼
+Grafana
 ```
 
-Applications use the internal Kubernetes endpoint:
+### 5. Elasticsearch metrics
+
+In Prometheus, try:
+
+```promql
+up{job="elasticsearch-exporter"}
+```
+
+and:
+
+```promql
+up{job="otel-collector"}
+```
+
+Useful Elasticsearch metrics include:
+
+```text
+elasticsearch_cluster_health_status
+elasticsearch_jvm_memory_used_bytes
+elasticsearch_indices_docs
+```
+
+---
+
+## Grafana dashboards
+
+The repository includes:
+
+```text
+dashboards/elasticsearch-cluster-overview.json
+dashboards/otel-demo-application-overview.json
+```
+
+Import the application dashboard through:
+
+```text
+Grafana → Dashboards → Import
+```
+
+Select the existing Prometheus datasource.
+
+Generate traffic:
+
+```bash
+./scripts/generate-data.sh
+```
+
+---
+
+## Components and namespaces
+
+| Namespace | Components |
+|---|---|
+| `elastic` | Elasticsearch |
+| `monitoring` | Prometheus, Grafana, Elasticsearch exporter |
+| `logging` | VictoriaLogs |
+| `opentelemetry` | OTel Collector, Jaeger, demo services |
+| `ingress-nginx` | NGINX Ingress |
+
+The Collector is internal-only. Applications send OTLP to:
 
 ```text
 opentelemetry-collector.opentelemetry.svc.cluster.local:4318
 ```
 
-Important ports:
+Important Collector ports:
 
 | Port | Purpose |
 |---:|---|
@@ -447,7 +429,7 @@ Important ports:
 | 8889 | Prometheus exporter |
 | 13133 | Health check |
 
-The Collector also adds Kubernetes metadata using `k8sattributes`, for example:
+The Collector uses the `k8sattributes` preset to enrich telemetry with Kubernetes metadata such as:
 
 ```text
 k8s.namespace.name
@@ -460,26 +442,75 @@ k8s.container.name
 
 ---
 
-# 9. Repository layout
+## Version pins
+
+The reproducible scripts currently use:
+
+| Component | Version |
+|---|---|
+| Elasticsearch | 8.15.0 |
+| Prometheus Helm chart | 29.27.0 |
+| Grafana Helm chart | 10.5.15 |
+| Elasticsearch exporter Helm chart | 7.4.0 |
+| OpenTelemetry Collector Helm chart | 0.172.1 |
+| OTel Collector image | `otel/opentelemetry-collector-contrib:0.159.0` |
+| VictoriaLogs Helm chart | 0.13.9 |
+| VictoriaLogs | 1.52.0 |
+| VictoriaLogs Grafana plugin | 0.31.0 |
+| Jaeger | 2.20.0 |
+| Python demo | 3.12 |
+
+The lab was validated with Minikube 1.38.1, Kubernetes 1.35.1 and Docker 29.2.1.
+
+---
+
+## Repository layout
 
 ```text
 platform-observability-lab/
 ├── README.md
 ├── VERSION
 ├── namespaces.yaml
+│
 ├── elasticsearch/
+│   ├── es-master.yaml
+│   ├── es-data.yaml
+│   ├── es-service.yaml
+│   └── es-ingress.yaml
+│
 ├── monitoring/
+│   ├── prometheus.yaml
+│   ├── grafana.yaml
+│   ├── elasticsearch-exporter-values.yaml
+│   └── monitoring-ingress.yaml
+│
 ├── logging/
+│   └── victoria-logs-values.yaml
+│
 ├── opentelemetry/
+│   └── collector-values.yaml
+│
 ├── tracing/
+│   ├── jaeger.yaml
+│   └── jaeger-ingress.yaml
+│
 ├── otel-demo/
 │   ├── app.py
+│   ├── requirements.txt
+│   ├── Dockerfile
 │   ├── deployment.yaml
 │   ├── ingress.yaml
+│   ├── README.md
 │   ├── user-service/
 │   └── inventory-service/
+│
 ├── dashboards/
+│   ├── elasticsearch-cluster-overview.json
+│   └── otel-demo-application-overview.json
+│
 ├── docs/
+│   └── troubleshooting.md
+│
 └── scripts/
     ├── start.sh
     ├── generate-data.sh
@@ -493,18 +524,43 @@ platform-observability-lab/
 
 ---
 
-# 10. Useful scripts
+## Day-to-day commands
 
-| Script | Purpose |
-|---|---|
-| `start.sh` | Start/recreate all lab workloads |
-| `generate-data.sh` | Generate success/error telemetry |
-| `validate.sh` | Validate the environment |
-| `tunnel.sh` | Start Minikube tunnel |
-| `hosts.sh` | Configure `/etc/hosts` |
-| `stop.sh` | Stop Minikube without deleting the cluster |
-| `uninstall.sh` | Remove lab workloads but keep Minikube |
-| `reset.sh` | Delete Minikube and rebuild from scratch |
+### Start
+
+```bash
+./scripts/start.sh
+```
+
+### Generate test telemetry
+
+```bash
+./scripts/generate-data.sh
+```
+
+Environment variables can be used to change the generated traffic:
+
+```bash
+SUCCESS_COUNT=50 FAILURE_COUNT=10 ERROR_COUNT=10 ./scripts/generate-data.sh
+```
+
+### Validate
+
+```bash
+./scripts/validate.sh
+```
+
+### Tunnel
+
+```bash
+./scripts/tunnel.sh
+```
+
+### Configure hosts
+
+```bash
+sudo ./scripts/hosts.sh
+```
 
 ### Stop
 
@@ -512,87 +568,45 @@ platform-observability-lab/
 ./scripts/stop.sh
 ```
 
-### Start again
+Stops Minikube while keeping the cluster state.
 
-```bash
-./scripts/start.sh
-```
-
-### Remove workloads
+### Uninstall workloads
 
 ```bash
 ./scripts/uninstall.sh
 ```
 
-### Full clean-room reset
+Removes the main lab workloads/namespaces but keeps Minikube.
+
+### Full reset
 
 ```bash
 ./scripts/reset.sh
 ```
 
-`reset.sh` is useful when you want to prove the repository can reproduce the lab from a clean Minikube cluster.
+Deletes the Minikube profile and recreates the lab from scratch.
+
+This removes:
+
+- Kubernetes resources
+- Elasticsearch storage
+- VictoriaLogs local storage
+- transient Jaeger traces
+- other local lab state
 
 ---
 
-# 11. Browser URLs
+## Troubleshooting
 
-| Component | URL |
-|---|---|
-| Grafana | http://grafana.local |
-| Prometheus | http://prometheus.local |
-| Elasticsearch | http://elasticsearch.local |
-| Jaeger | http://jaeger.local |
-| Demo application | http://otel-demo.local |
+### Browser cannot reach `.local` URLs
 
-VictoriaLogs and the Collector are internal Kubernetes services.
-
----
-
-# 12. Troubleshooting
-
-Start with:
-
-```bash
-kubectl get pods -A
-kubectl get svc -A
-kubectl get ingress -A
-kubectl top node
-kubectl top pods -A
-```
-
-Collector:
-
-```bash
-kubectl logs -n opentelemetry deployment/opentelemetry-collector --since=10m
-```
-
-Jaeger:
-
-```bash
-kubectl logs -n opentelemetry deployment/jaeger --tail=100
-```
-
-VictoriaLogs:
-
-```bash
-kubectl logs -n logging   -l app.kubernetes.io/instance=victoria-logs   --tail=100
-```
-
-Demo services:
-
-```bash
-kubectl logs -n opentelemetry deployment/otel-demo --tail=100
-kubectl logs -n opentelemetry deployment/user-service --tail=100
-kubectl logs -n opentelemetry deployment/inventory-service --tail=100
-```
-
-If `.local` URLs do not work:
+Check hosts:
 
 ```bash
 grep -E 'grafana\.local|prometheus\.local|elasticsearch\.local|jaeger\.local|otel-demo\.local' /etc/hosts
 ```
 
-Then:
+Check Minikube and Ingress:
 
 ```bash
 minikube status
@@ -600,93 +614,208 @@ kubectl get pods -n ingress-nginx
 kubectl get ingress -A
 ```
 
-Restart the tunnel if required:
-
-```bash
-minikube tunnel --cleanup
-./scripts/tunnel.sh
-```
-
-More detailed troubleshooting is in:
-
-```text
-docs/troubleshooting.md
-```
-
----
-
-# 13. Production note
-
-This lab intentionally avoids turning tracing into another large production datastore.
-
-Jaeger uses memory storage here. A production implementation would normally require:
-
-```text
-OTel Collector
-      ↓
-sampling / filtering
-      ↓
-persistent trace backend
-      ↓
-Jaeger
-```
-
-Before adding persistent trace storage, measure:
-
-- requests/sec
-- spans/request
-- trace volume
-- retention
-- query workload
-- percentage of errors/slow traces
-
-Then design sampling and retention around actual value and cost.
-
----
-
-# 14. 30-second quick start
-
-If you only want the commands:
-
-```bash
-git clone <your-platform-observability-lab-repo-url>
-cd platform-observability-lab
-chmod +x scripts/*.sh
-./scripts/start.sh
-```
-
-Second terminal:
+If using a Docker-based Minikube environment, start the tunnel:
 
 ```bash
 ./scripts/tunnel.sh
 ```
 
-Third terminal:
+### Grafana shows no application data
+
+Check:
+
+```promql
+up
+```
+
+Then:
+
+```promql
+app_requests_total
+```
+
+Generate traffic:
 
 ```bash
-sudo ./scripts/hosts.sh
-./scripts/validate.sh
 ./scripts/generate-data.sh
 ```
 
-Open:
-
-```text
-http://grafana.local
-http://jaeger.local
-http://otel-demo.local
-```
-
-Run the failure demo:
+Check Grafana resources:
 
 ```bash
-curl -s "http://otel-demo.local/api?fail_inventory=true"
+kubectl top pod -n monitoring -l app.kubernetes.io/name=grafana
 ```
 
-Then follow:
+### Collector is running but application metrics are missing
+
+Check the Collector:
+
+```bash
+kubectl logs -n opentelemetry deployment/opentelemetry-collector --since=10m
+```
+
+Check its Service:
+
+```bash
+kubectl get svc opentelemetry-collector -n opentelemetry
+```
+
+Remember:
 
 ```text
-VictoriaLogs → trace_id → Jaeger → failing service
+8888 = Collector internal telemetry metrics
+8889 = Prometheus exporter for application metrics
 ```
 
-**That's the lab.**
+### Traces reach Collector but not Jaeger
+
+Check:
+
+```bash
+kubectl logs -n opentelemetry deployment/opentelemetry-collector --since=10m
+```
+
+The trace pipeline should export to Jaeger using:
+
+```yaml
+otlp_grpc:
+  endpoint: jaeger.opentelemetry.svc.cluster.local:4317
+  tls:
+    insecure: true
+```
+
+### Logs are missing from VictoriaLogs
+
+Check Collector logs:
+
+```bash
+kubectl logs -n opentelemetry deployment/opentelemetry-collector --since=10m
+```
+
+Check VictoriaLogs:
+
+```bash
+kubectl logs -n logging \
+  -l app.kubernetes.io/instance=victoria-logs \
+  --tail=100
+```
+
+The Collector sends logs to:
+
+```text
+http://victoria-logs-victoria-logs-single-server.logging.svc.cluster.local:9428/insert/opentelemetry/v1/logs
+```
+
+### General Kubernetes overview
+
+```bash
+kubectl get nodes
+kubectl get pods -A
+kubectl get svc -A
+kubectl get ingress -A
+kubectl top node
+kubectl top pods -A
+```
+
+---
+
+## Manual demo image rebuild
+
+`start.sh` builds the application images automatically.
+
+To rebuild manually:
+
+```bash
+eval "$(minikube docker-env -p minikube)"
+
+docker build -t otel-demo:1.2 otel-demo/
+docker build -t otel-user-service:1.0 otel-demo/user-service/
+docker build -t otel-inventory-service:1.0 otel-demo/inventory-service/
+```
+
+Then redeploy:
+
+```bash
+kubectl apply -f otel-demo/user-service/deployment.yaml
+kubectl apply -f otel-demo/inventory-service/deployment.yaml
+kubectl apply -f otel-demo/deployment.yaml
+kubectl apply -f otel-demo/ingress.yaml
+```
+
+---
+
+## Production direction
+
+This lab intentionally keeps the architecture small.
+
+A production evolution would typically add:
+
+```text
+Application
+    │
+    ▼
+OTel Collector
+    ├──► Metrics backend
+    ├──► VictoriaLogs
+    └──► Persistent trace backend
+                 │
+                 ▼
+              Jaeger
+```
+
+Before introducing persistent tracing, evaluate:
+
+- requests/sec
+- spans/request
+- bytes/span
+- traces/day
+- retention
+- query workload
+- error/slow-trace percentage
+
+Then apply an intentional sampling strategy.
+
+For example:
+
+```text
+100% of errors
+100% of critical/very slow traces
+small percentage of normal successful traffic
+short trace retention
+```
+
+The important takeaway from this lab is the telemetry model:
+
+```text
+                    ┌──► Metrics backend
+                    │
+Application ──► OTel Collector ──► Logs backend
+                    │
+                    └──► Trace backend
+```
+
+Applications only need to know the OTLP endpoint. The Collector becomes the control point for routing, batching, memory protection, Kubernetes metadata enrichment and future processing.
+
+---
+
+## Lab conclusion
+
+This playground provides an end-to-end Platform Engineering observability workflow:
+
+```text
+Application
+    │
+    ▼
+OpenTelemetry Collector
+    ├── Logs ────► VictoriaLogs ──► Grafana
+    ├── Metrics ─► Prometheus ────► Grafana
+    └── Traces ──► Jaeger ────────► Jaeger UI
+```
+
+plus:
+
+```text
+Elasticsearch ──► ES Exporter ──► Prometheus ──► Grafana
+```
+
+It is designed to be easy to start locally, demonstrate the three observability signals, reproduce failure scenarios, and provide a foundation for later production-oriented discussions around sampling, retention, persistence and cost.
