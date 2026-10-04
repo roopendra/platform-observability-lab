@@ -1,4 +1,4 @@
-# OTel Demo 1.2 — Distributed Trace Demo
+# OTel Demo 1.3 — Distributed Trace Demo
 
 This version expands the original single-service Flask demo into a small
 three-service request flow:
@@ -45,10 +45,10 @@ The exact span names and hierarchy can vary slightly with instrumentation versio
 From this directory:
 
 ```bash
-docker build -t otel-demo:1.2 .
+docker build -t otel-demo:1.3 .
 docker build -t otel-user-service:1.0 ./user-service
 docker build -t otel-inventory-service:1.0 ./inventory-service
-k3d image import -c lab-cluster otel-demo:1.2 otel-user-service:1.0 otel-inventory-service:1.0
+k3d image import -c lab-cluster otel-demo:1.3 otel-user-service:1.0 otel-inventory-service:1.0
 ```
 
 ## Deploy

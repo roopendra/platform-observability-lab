@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: otel-demo
-          image: otel-demo:1.2
+          image: otel-demo:1.3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

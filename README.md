@@ -103,6 +103,8 @@ kubectl config use-context k3d-lab-cluster
 
 On macOS, keep OrbStack running. `start.sh` attempts to open OrbStack if the Docker-compatible daemon is not ready. If your cluster has another name, set `K3D_CLUSTER_NAME` when running the scripts. `start.sh` uses the existing cluster and installs NGINX Ingress. It builds the demo images through OrbStack's Docker-compatible CLI and imports them into k3d's containerd image store.
 
+The demo runs the version in this checkout: `start.sh` builds the local source and imports `otel-demo:1.3` (plus the two service images) into k3d. It does not pull the demo from a registry, so users get the checked-out lab code rather than an independently updated remote `latest` image. When changing the demo, keep the image tag in `scripts/start.sh`, `otel-demo/deployment.yaml`, and the manual rebuild commands below in sync.
+
 ### 2. Start the lab
 
 From the repository root:
@@ -718,10 +720,10 @@ kubectl top pods -A
 To rebuild manually:
 
 ```bash
-docker build -t otel-demo:1.2 otel-demo/
+docker build -t otel-demo:1.3 otel-demo/
 docker build -t otel-user-service:1.0 otel-demo/user-service/
 docker build -t otel-inventory-service:1.0 otel-demo/inventory-service/
-k3d image import -c "${K3D_CLUSTER_NAME:-lab-cluster}" otel-demo:1.2 otel-user-service:1.0 otel-inventory-service:1.0
+k3d image import -c "${K3D_CLUSTER_NAME:-lab-cluster}" otel-demo:1.3 otel-user-service:1.0 otel-inventory-service:1.0
 ```
 
 Then redeploy:
