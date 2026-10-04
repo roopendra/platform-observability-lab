@@ -4,7 +4,7 @@
 
 ```bash
 docker info
-minikube status
+k3d cluster list
 kubectl get nodes
 kubectl get pods -A
 kubectl get svc -A
@@ -18,6 +18,8 @@ For a full check:
 ```bash
 ./scripts/validate.sh
 ```
+
+If `docker info` cannot connect on macOS, open OrbStack and retry. Confirm the `docker` CLI is available and points to OrbStack's Docker-compatible engine before running `start.sh`.
 
 ---
 
@@ -187,8 +189,8 @@ If logs are missing:
 Generate traffic:
 
 ```bash
-curl -s http://otel-demo.local/api >/dev/null
-curl -s "http://otel-demo.local/api?fail_inventory=true" >/dev/null
+curl -s http://otel-demo.local:8080/api >/dev/null
+curl -s "http://otel-demo.local:8080/api?fail_inventory=true" >/dev/null
 ```
 
 ---
@@ -263,7 +265,7 @@ kubectl logs -n opentelemetry deployment/jaeger --tail=100
 Jaeger UI:
 
 ```text
-http://jaeger.local
+http://jaeger.local:8080
 ```
 
 Remember that the lab uses in-memory trace storage. A Jaeger restart loses existing traces.
@@ -292,17 +294,17 @@ jaeger
 Health checks:
 
 ```bash
-curl -s http://otel-demo.local/health
+curl -s http://otel-demo.local:8080/health
 ```
 
 ```bash
-curl -s http://otel-demo.local/api
+curl -s http://otel-demo.local:8080/api
 ```
 
 Failure test:
 
 ```bash
-curl -s "http://otel-demo.local/api?fail_inventory=true"
+curl -s "http://otel-demo.local:8080/api?fail_inventory=true"
 ```
 
 Expected failure flow:
@@ -328,7 +330,7 @@ kubectl logs -n opentelemetry deployment/opentelemetry-collector --since=5m
 Generate a new request:
 
 ```bash
-curl -s http://otel-demo.local/api >/dev/null
+curl -s http://otel-demo.local:8080/api >/dev/null
 ```
 
 The Python services use OpenTelemetry logging and trace context.
@@ -366,16 +368,9 @@ kubectl get ingress -A
 kubectl get pods -n ingress-nginx
 ```
 
-Check tunnel:
+Start the Ingress port-forward (keep it running in its terminal):
 
 ```bash
-minikube tunnel
-```
-
-If stale routes exist:
-
-```bash
-minikube tunnel --cleanup
 ./scripts/tunnel.sh
 ```
 
@@ -404,7 +399,7 @@ kubectl port-forward \
   9428:9428
 ```
 
-If these work while `.local` URLs do not, the workloads are likely healthy and the problem is in the Ingress/tunnel/host networking path.
+If these work while `.local:8080` URLs do not, the workloads are likely healthy and the problem is in the Ingress or port-forward path.
 
 ---
 
@@ -416,5 +411,4 @@ If the lab gets into an unknown state:
 ./scripts/reset.sh
 ```
 
-This deletes the Minikube profile and recreates the complete environment.
-
+This deletes the k3d cluster and all its data, recreates it, and reinstalls the complete environment.

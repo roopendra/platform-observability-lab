@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
+K3D_CLUSTER_NAME="${K3D_CLUSTER_NAME:-lab-cluster}"
 PROMETHEUS_CHART_VERSION="${PROMETHEUS_CHART_VERSION:-29.27.0}"
 GRAFANA_CHART_VERSION="${GRAFANA_CHART_VERSION:-10.5.15}"
 EXPORTER_CHART_VERSION="${EXPORTER_CHART_VERSION:-7.4.0}"
@@ -24,15 +24,15 @@ require_cmd() {
   }
 }
 
-for cmd in docker kubectl minikube helm; do
+for cmd in docker kubectl k3d helm; do
   require_cmd "$cmd"
 done
 
-log "Starting Docker Desktop if needed"
+log "Checking the Docker-compatible container runtime"
 if ! docker info >/dev/null 2>&1; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    open -a Docker || true
-    echo "Waiting for Docker Desktop..."
+    open -a OrbStack || true
+    echo "Waiting for OrbStack..."
     for _ in {1..60}; do
       if docker info >/dev/null 2>&1; then break; fi
       sleep 2
@@ -41,17 +41,17 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 docker info >/dev/null 2>&1 || {
-  echo "ERROR: Docker daemon is not ready. Start Docker Desktop and rerun." >&2
+  echo "ERROR: Docker is unavailable. Start OrbStack on macOS (or your Docker-compatible runtime) and rerun." >&2
   exit 1
 }
 
-log "Starting Minikube with Docker driver"
-if ! minikube status -p "$MINIKUBE_PROFILE" 2>/dev/null | grep -q 'host: Running'; then
-  minikube start -p "$MINIKUBE_PROFILE" --driver=docker
+log "Checking k3d cluster and Kubernetes context"
+if ! k3d cluster list -o json | grep -Eq '"name"[[:space:]]*:[[:space:]]*"'"$K3D_CLUSTER_NAME"'"'; then
+  echo "ERROR: k3d cluster '$K3D_CLUSTER_NAME' was not found. Create it first with: k3d cluster create '$K3D_CLUSTER_NAME'" >&2
+  exit 1
 fi
-
-log "Enabling NGINX Ingress"
-minikube addons enable ingress -p "$MINIKUBE_PROFILE"
+kubectl config use-context "k3d-$K3D_CLUSTER_NAME" >/dev/null
+kubectl get nodes
 
 log "Creating namespaces"
 kubectl apply -f namespaces.yaml
@@ -66,7 +66,17 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
 helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts >/dev/null 2>&1 || true
 helm repo add vm https://victoriametrics.github.io/helm-charts/ >/dev/null 2>&1 || true
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx >/dev/null 2>&1 || true
 helm repo update
+
+log "Installing/upgrading NGINX Ingress Controller"
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.service.type=NodePort \
+  --set controller.service.nodePorts.http=30080 \
+  --set controller.service.nodePorts.https=30443
+kubectl rollout status deployment/ingress-nginx-controller \
+  -n ingress-nginx --timeout=180s
 
 log "Installing/upgrading Prometheus"
 helm upgrade --install prometheus \
@@ -108,15 +118,15 @@ helm upgrade --install opentelemetry-collector \
 log "Deploying Jaeger"
 kubectl apply -f tracing/jaeger.yaml
 
-log "Building distributed OTel demo images inside Minikube"
+log "Building and importing distributed OTel demo images into k3d"
 [[ -d otel-demo ]] || { echo "ERROR: otel-demo/ directory not found." >&2; exit 1; }
 [[ -d otel-demo/user-service ]] || { echo "ERROR: otel-demo/user-service/ directory not found." >&2; exit 1; }
 [[ -d otel-demo/inventory-service ]] || { echo "ERROR: otel-demo/inventory-service/ directory not found." >&2; exit 1; }
 
-eval "$(minikube docker-env -p "$MINIKUBE_PROFILE")"
 docker build -t "$OTEL_DEMO_IMAGE" otel-demo/
 docker build -t "$OTEL_USER_IMAGE" otel-demo/user-service/
 docker build -t "$OTEL_INVENTORY_IMAGE" otel-demo/inventory-service/
+k3d image import -c "$K3D_CLUSTER_NAME" "$OTEL_DEMO_IMAGE" "$OTEL_USER_IMAGE" "$OTEL_INVENTORY_IMAGE"
 
 log "Deploying distributed demo application"
 kubectl apply -f otel-demo/user-service/deployment.yaml
@@ -166,7 +176,7 @@ cat <<'EOF'
 Setup complete.
 
 Next:
-  1. In a second terminal run:
+  1. In a second terminal run the Ingress port-forward:
        ./scripts/tunnel.sh
 
   2. Configure local hostnames:
@@ -176,11 +186,11 @@ Next:
        ./scripts/validate.sh
 
   4. Open:
-       http://grafana.local
-       http://prometheus.local
-       http://elasticsearch.local
-       http://jaeger.local
-       http://otel-demo.local
+       http://grafana.local:8080
+       http://prometheus.local:8080
+       http://elasticsearch.local:8080
+       http://jaeger.local:8080
+       http://otel-demo.local:8080
 
 Grafana credentials:
   The username/password are managed by the Grafana Helm values/Secret.
@@ -207,6 +217,6 @@ OTel Collector:
   Prometheus exporter :8889
   Health check :13133
 
-Normal browser access does not require application port-forwarding.
+Browser access uses the Ingress port-forward on localhost:8080.
 The Collector and VictoriaLogs are internal services reached through Kubernetes DNS.
 EOF

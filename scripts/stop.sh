@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
+K3D_CLUSTER_NAME="${K3D_CLUSTER_NAME:-lab-cluster}"
 
-if minikube status -p "$MINIKUBE_PROFILE" >/dev/null 2>&1; then
-  minikube stop -p "$MINIKUBE_PROFILE"
-  echo "Minikube stopped. Data and Kubernetes resources are retained."
+if k3d cluster list -o json | grep -Eq '"name"[[:space:]]*:[[:space:]]*"'"$K3D_CLUSTER_NAME"'"'; then
+  k3d cluster stop "$K3D_CLUSTER_NAME"
+  echo "k3d cluster stopped. Data and Kubernetes resources are retained."
 else
-  echo "Minikube profile '$MINIKUBE_PROFILE' does not exist or is already stopped."
+  echo "k3d cluster '$K3D_CLUSTER_NAME' does not exist."
 fi
 
 echo "Start again with: ./scripts/start.sh"

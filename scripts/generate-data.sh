@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${OTEL_DEMO_URL:-http://otel-demo.local}"
+BASE_URL="${OTEL_DEMO_URL:-http://otel-demo.local:8080}"
 SUCCESS_COUNT="${SUCCESS_COUNT:-20}"
 FAILURE_COUNT="${FAILURE_COUNT:-5}"
 ERROR_COUNT="${ERROR_COUNT:-5}"
@@ -25,6 +25,6 @@ done
 
 echo
 echo "Telemetry generated."
-echo "Grafana:  http://grafana.local"
-echo "Jaeger:   http://jaeger.local"
+echo "Grafana:  http://grafana.local:8080"
+echo "Jaeger:   http://jaeger.local:8080"
 echo "Demo app: $BASE_URL"

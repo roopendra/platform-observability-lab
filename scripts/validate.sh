@@ -49,8 +49,8 @@ run_curl_check() {
   return 1
 }
 
-echo "=== Minikube ==="
-check minikube status -p "${MINIKUBE_PROFILE:-minikube}"
+echo "=== k3d ==="
+check k3d cluster list
 check kubectl get nodes
 
 echo
@@ -189,8 +189,8 @@ if [[ "$fail" -eq 0 ]]; then
   echo "Validation completed successfully."
   echo
   echo "Next E2E checks:"
-  echo "  curl -s http://otel-demo.local/api"
-  echo "  curl -s 'http://otel-demo.local/api?fail_inventory=true'"
+  echo "  curl -s http://otel-demo.local:8080/api"
+  echo "  curl -s 'http://otel-demo.local:8080/api?fail_inventory=true'"
   echo "  Then inspect the trace in Jaeger and logs in Grafana → Explore → VictoriaLogs."
 else
   echo

@@ -1,6 +1,6 @@
 # Platform Observability Lab
 
-A reproducible local Kubernetes observability playground for **macOS and Linux** using Minikube and the Docker driver.
+A reproducible local Kubernetes observability playground for **macOS and Linux** using k3d. On macOS, OrbStack provides the Docker-compatible runtime for the k3d nodes and local image builds.
 
 This lab demonstrates:
 
@@ -77,8 +77,8 @@ Elasticsearch is used only for infrastructure monitoring. It is **not** the appl
 
 Install:
 
-- Docker / Docker Desktop
-- Minikube
+- OrbStack on macOS (or Docker Engine on Linux), with the `docker` CLI available
+- k3d
 - kubectl
 - Helm
 - Python 3
@@ -87,19 +87,21 @@ Check:
 
 ```bash
 docker --version
+docker info
 kubectl version --client
-minikube version
+k3d version
 helm version
 python3 --version
 ```
 
-The lab uses the Minikube Docker driver:
+Create the cluster if you have not already created it. The default name is `lab-cluster`:
 
 ```bash
-minikube start --driver=docker
+k3d cluster create lab-cluster
+kubectl config use-context k3d-lab-cluster
 ```
 
-`start.sh` handles Minikube startup automatically.
+On macOS, keep OrbStack running. `start.sh` attempts to open OrbStack if the Docker-compatible daemon is not ready. If your cluster has another name, set `K3D_CLUSTER_NAME` when running the scripts. `start.sh` uses the existing cluster and installs NGINX Ingress. It builds the demo images through OrbStack's Docker-compatible CLI and imports them into k3d's containerd image store.
 
 ### 2. Start the lab
 
@@ -112,7 +114,7 @@ chmod +x scripts/*.sh
 
 The script installs/deploys:
 
-- Minikube + NGINX Ingress
+- k3d + NGINX Ingress Controller
 - Elasticsearch
 - Prometheus
 - Grafana
@@ -140,27 +142,17 @@ Add them to `/etc/hosts`:
 sudo ./scripts/hosts.sh
 ```
 
-#### macOS
+#### macOS and Linux
 
-With Minikube + Docker driver, browser access normally requires the Minikube tunnel.
-
-Run in a second terminal:
+The lab forwards local port 8080 to the Ingress Controller. Run this in a second terminal and keep it open:
 
 ```bash
 ./scripts/tunnel.sh
 ```
 
-Keep the tunnel terminal running.
+Add `127.0.0.1` host entries using the helper above. Open the URLs with port `8080` (for example `http://grafana.local:8080`).
 
-#### Linux
-
-The exact networking behavior depends on the Docker/Minikube environment. If the browser-facing Ingress is not reachable directly, use:
-
-```bash
-./scripts/tunnel.sh
-```
-
-The normal application workflow does **not** require `kubectl port-forward`.
+This command uses `kubectl port-forward` to expose all Ingress hostnames through one local port.
 
 ### 4. Validate
 
@@ -178,13 +170,13 @@ Or generate individual scenarios:
 
 ```bash
 # Successful distributed request
-curl -s http://otel-demo.local/api
+curl -s http://otel-demo.local:8080/api
 
 # Downstream failure
-curl -s "http://otel-demo.local/api?fail_inventory=true"
+curl -s "http://otel-demo.local:8080/api?fail_inventory=true"
 
 # Direct application error
-curl -s http://otel-demo.local/error
+curl -s http://otel-demo.local:8080/error
 ```
 
 ---
@@ -195,11 +187,11 @@ With `/etc/hosts` configured and Ingress networking working:
 
 | Component | URL |
 |---|---|
-| Grafana | http://grafana.local |
-| Prometheus | http://prometheus.local |
-| Elasticsearch | http://elasticsearch.local |
-| Jaeger | http://jaeger.local |
-| Demo application | http://otel-demo.local |
+| Grafana | http://grafana.local:8080 |
+| Prometheus | http://prometheus.local:8080 |
+| Elasticsearch | http://elasticsearch.local:8080 |
+| Jaeger | http://jaeger.local:8080 |
+| Demo application | http://otel-demo.local:8080 |
 
 Grafana is configured with:
 
@@ -234,13 +226,13 @@ Do not commit real credentials to source control.
 Generate:
 
 ```bash
-curl -s http://otel-demo.local/api
+curl -s http://otel-demo.local:8080/api
 ```
 
 Open Jaeger:
 
 ```text
-http://jaeger.local
+http://jaeger.local:8080
 ```
 
 Search for service:
@@ -266,7 +258,7 @@ otel-demo
 Run:
 
 ```bash
-curl -s "http://otel-demo.local/api?fail_inventory=true"
+curl -s "http://otel-demo.local:8080/api?fail_inventory=true"
 ```
 
 Expected high-level result:
@@ -286,7 +278,7 @@ Jaeger should show the downstream inventory operation and its parent request mar
 Open:
 
 ```text
-http://grafana.local
+http://grafana.local:8080
 ```
 
 Go to:
@@ -460,7 +452,7 @@ The reproducible scripts currently use:
 | Jaeger | 2.20.0 |
 | Python demo | 3.12 |
 
-The lab was validated with Minikube 1.38.1, Kubernetes 1.35.1 and Docker 29.2.1.
+The lab runs on a k3d cluster using k3s and containerd. The demo images are imported into the cluster by `start.sh`.
 
 ---
 
@@ -550,7 +542,7 @@ SUCCESS_COUNT=50 FAILURE_COUNT=10 ERROR_COUNT=10 ./scripts/generate-data.sh
 ./scripts/validate.sh
 ```
 
-### Tunnel
+### Ingress port-forward
 
 ```bash
 ./scripts/tunnel.sh
@@ -568,7 +560,7 @@ sudo ./scripts/hosts.sh
 ./scripts/stop.sh
 ```
 
-Stops Minikube while keeping the cluster state.
+Stops the k3d cluster while keeping its state.
 
 ### Uninstall workloads
 
@@ -576,7 +568,7 @@ Stops Minikube while keeping the cluster state.
 ./scripts/uninstall.sh
 ```
 
-Removes the main lab workloads/namespaces but keeps Minikube.
+Removes the main lab workloads/namespaces but keeps the k3d cluster.
 
 ### Full reset
 
@@ -584,7 +576,7 @@ Removes the main lab workloads/namespaces but keeps Minikube.
 ./scripts/reset.sh
 ```
 
-Deletes the Minikube profile and recreates the lab from scratch.
+Deletes and recreates the k3d cluster, then reinstalls the lab. This removes all cluster data.
 
 This removes:
 
@@ -598,7 +590,7 @@ This removes:
 
 ## Troubleshooting
 
-### Browser cannot reach `.local` URLs
+### Browser cannot reach `.local:8080` URLs
 
 Check hosts:
 
@@ -606,15 +598,15 @@ Check hosts:
 grep -E 'grafana\.local|prometheus\.local|elasticsearch\.local|jaeger\.local|otel-demo\.local' /etc/hosts
 ```
 
-Check Minikube and Ingress:
+Check k3d and Ingress:
 
 ```bash
-minikube status
+k3d cluster list
 kubectl get pods -n ingress-nginx
 kubectl get ingress -A
 ```
 
-If using a Docker-based Minikube environment, start the tunnel:
+Start the local Ingress port-forward in another terminal:
 
 ```bash
 ./scripts/tunnel.sh
@@ -726,11 +718,10 @@ kubectl top pods -A
 To rebuild manually:
 
 ```bash
-eval "$(minikube docker-env -p minikube)"
-
 docker build -t otel-demo:1.2 otel-demo/
 docker build -t otel-user-service:1.0 otel-demo/user-service/
 docker build -t otel-inventory-service:1.0 otel-demo/inventory-service/
+k3d image import -c "${K3D_CLUSTER_NAME:-lab-cluster}" otel-demo:1.2 otel-user-service:1.0 otel-inventory-service:1.0
 ```
 
 Then redeploy:

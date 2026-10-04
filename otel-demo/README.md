@@ -40,16 +40,15 @@ otel-demo: GET /api
 
 The exact span names and hierarchy can vary slightly with instrumentation versions.
 
-## Build inside Minikube
+## Build and import into k3d
 
 From this directory:
 
 ```bash
-eval "$(minikube docker-env -p minikube)"
-
 docker build -t otel-demo:1.2 .
 docker build -t otel-user-service:1.0 ./user-service
 docker build -t otel-inventory-service:1.0 ./inventory-service
+k3d image import -c lab-cluster otel-demo:1.2 otel-user-service:1.0 otel-inventory-service:1.0
 ```
 
 ## Deploy
@@ -72,15 +71,15 @@ kubectl rollout status deployment/otel-demo -n opentelemetry
 ## Verify
 
 ```bash
-curl http://otel-demo.local/health
-curl http://otel-demo.local/api
+curl http://otel-demo.local:8080/health
+curl http://otel-demo.local:8080/api
 ```
 
 Generate several requests:
 
 ```bash
 for i in {1..5}; do
-  curl -s http://otel-demo.local/api
+  curl -s http://otel-demo.local:8080/api
   echo
 done
 ```
@@ -96,7 +95,7 @@ You should now see multiple services and multiple spans.
 ## Demonstrate an error
 
 ```bash
-curl -s "http://otel-demo.local/api?fail_inventory=true"
+curl -s "http://otel-demo.local:8080/api?fail_inventory=true"
 ```
 
 The root service should return HTTP 502 because the inventory service deliberately

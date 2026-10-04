@@ -427,3 +427,21 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# General macOS system files
+.DS_Store                            # Folder layout/icon display preferences
+.AppleDouble                         # AppleDouble files for resource forks
+.LSOverride                          # Local override files
+
+# Thumbnails and file forks
+._*                                  # Apple Double shadow files (hidden metadata)
+Icon\r                               # Custom folder icons (ends with a carriage return)
+
+# Files that appear on external disks/network drives
+.Spotlight-V100                      # Spotlight indexing data
+.Trashes                             # Trash folder directory on external drives
+.fseventsd                           # File system events logging directory
+.VolumeIcon.icns                     # Custom icon for the disk volume
+.DocumentRevisions-V100              # Auto-save and version history database
+.TemporaryItems                      # Cached items
+.apdisk                              # AppleShare folder rules

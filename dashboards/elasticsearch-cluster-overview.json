@@ -1133,7 +1133,7 @@
   "tags": [
     "elasticsearch",
     "prometheus",
-    "minikube",
+    "k3d",
     "elasticsearch-exporter"
   ],
   "templating": {

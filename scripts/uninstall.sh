@@ -21,5 +21,5 @@ kubectl delete namespace monitoring --ignore-not-found=true
 kubectl delete namespace elastic --ignore-not-found=true
 
 echo
-echo "Done. Minikube itself was not deleted."
+echo "Done. The k3d cluster itself was not deleted."
 echo "Run ./scripts/start.sh to recreate the complete lab."
